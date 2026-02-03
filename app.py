@@ -9,8 +9,10 @@ from openai import OpenAI
 # ---------- PAGE CONFIG ----------
 st.set_page_config(page_title="AI Bullwhip Advisor", layout="wide")
 
-# ---------- LOAD MODEL ----------
-model = load_model("bullwhip_lstm_model.h5")
+# ---------- LOAD MODEL (SAFE MODE) ----------
+model = load_model("bullwhip_lstm_model.h5", compile=False)
+model.compile(optimizer="adam", loss="mse")
+
 scaler_X = joblib.load("scaler_X.pkl")
 scaler_y = joblib.load("scaler_y.pkl")
 
