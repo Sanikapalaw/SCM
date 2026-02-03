@@ -5,37 +5,47 @@ from sklearn.ensemble import RandomForestRegressor
 import matplotlib.pyplot as plt
 import seaborn as sns
 
+# --- PAGE SETTINGS ---
 st.set_page_config(page_title="Supply Chain Assistant", layout="wide")
 
-# --- CUSTOM CSS FOR USER FRIENDLINESS ---
+# --- CUSTOM DESIGN (CSS) ---
 st.markdown("""
     <style>
-    .main { background-color: #f5f7f9; }
-    .stMetric { background-color: #ffffff; padding: 15px; border-radius: 10px; box-shadow: 0px 2px 10px rgba(0,0,0,0.05); }
+    .main { background-color: #f8f9fa; }
+    .stMetric { background-color: #ffffff; padding: 15px; border-radius: 10px; border: 1px solid #e0e0e0; }
     </style>
-    """, unsafe_approx=True)
+    """, unsafe_allow_html=True)
 
-@st.cache_data
+# --- DATA & MODEL LOADING ---
+@st.cache_resource
 def load_and_train():
+    # Load your dataset
     df = pd.read_csv('data.csv')
-    # Train a simple model in the background
+    
+    # Define simple features for the AI
     features = ['Demand', 'Forecast', 'NS', 'LTD', 'SS', 'OUT']
     X = df[features]
     y = df['Order']
-    model = RandomForestRegressor(n_estimators=50, random_state=42)
+    
+    # Train the AI Model
+    model = RandomForestRegressor(n_estimators=100, random_state=42)
     model.fit(X, y)
     return df, model, features
 
-df, model, features = load_and_train()
+try:
+    df, model, features = load_and_train()
+except FileNotFoundError:
+    st.error("❌ 'data.csv' not found. Please make sure it's in the same folder as this script!")
+    st.stop()
 
-# --- HEADER SECTION ---
+# --- HEADER ---
 st.title("📦 Smart Supply Chain Assistant")
 st.markdown("""
-Welcome! This tool helps you see how small changes in customer orders can cause big "ripples" in your warehouse. 
-We use **AI** to predict exactly how much you should order from your supplier to keep things stable.
+This app uses **Artificial Intelligence** to help you manage the 'Bullwhip Effect'—the phenomenon 
+where small changes in customer demand create massive waves of overstock or shortages.
 """)
 
-# --- KPI SECTION (VOLATILITY METER) ---
+# --- KPI SECTION (The 'Ripple' Meter) ---
 st.divider()
 var_demand = df['Demand'].var()
 var_order = df['Order'].var()
@@ -43,61 +53,62 @@ bw_ratio = var_order / var_demand
 
 col1, col2, col3 = st.columns(3)
 with col1:
-    st.metric("Customer Demand Stability", "Normal", help="Is the customer buying pattern steady?")
+    st.metric("Supply Chain Health", "✅ Stable" if bw_ratio < 2.5 else "⚠️ High Ripple")
 with col2:
-    status = "⚠️ High Ripple" if bw_ratio > 2 else "✅ Stable"
-    st.metric("Supply Chain Health", status, delta=f"{bw_ratio:.1f}x Volatility")
+    st.metric("Ripple Factor", f"{bw_ratio:.2f}x", help="Shows how much orders vary compared to demand.")
 with col3:
-    st.metric("Efficiency Score", "84%", help="How well our current ordering matches demand.")
+    st.metric("Data Points Analyzed", len(df))
 
-# --- INTERACTIVE SIMULATOR (THE "WHAT-IF") ---
-st.subheader("🔮 Predictive Ordering Assistant")
-st.write("Adjust the sliders below to see what the AI recommends you order based on different situations.")
+# --- INTERACTIVE PREDICTOR ---
+st.subheader("🔮 AI Order Predictor")
+st.info("What is the current situation? Select a scenario or use the sliders below.")
 
-# 
-
-# Scenario Buttons for non-tech users
-st.write("**Quick Scenarios:**")
+# Scenario Buttons for quick use
 c1, c2, c3 = st.columns(3)
-scen_demand = df['Demand'].mean()
-scen_forecast = df['Forecast'].mean()
+selected_demand = df['Demand'].mean()
+selected_forecast = df['Forecast'].mean()
 
-if c1.button("📉 Low Demand Period"):
-    scen_demand, scen_forecast = 50.0, 55.0
-if c2.button("🏠 Normal Operations"):
-    scen_demand, scen_forecast = 100.0, 102.0
-if c3.button("🚀 Sudden Sales Spike"):
-    scen_demand, scen_forecast = 160.0, 175.0
+if c1.button("📉 Slow Season (Low Demand)"):
+    selected_demand, selected_forecast = 60.0, 65.0
+if c2.button("🏠 Business as Usual"):
+    selected_demand, selected_forecast = 100.0, 105.0
+if c3.button("🚀 Holiday Peak (High Demand)"):
+    selected_demand, selected_forecast = 160.0, 180.0
 
-# User Inputs
-with st.expander("Adjust Specific Details (Advanced)", expanded=True):
-    col_a, col_b = st.columns(2)
-    with col_a:
-        in_demand = st.slider("Actual Customer Demand", 0.0, 200.0, float(scen_demand))
-        in_forecast = st.slider("Your Sales Forecast", 0.0, 200.0, float(scen_forecast))
-    with col_b:
-        in_ss = st.slider("Safety Stock (Just-in-case)", 0.0, 50.0, 30.0)
-        # Hidden inputs set to average for simplicity
-        in_ns = 30.0 
-        in_ltd = in_forecast 
+# Input Sliders
+with st.container():
+    col_left, col_right = st.columns(2)
+    with col_left:
+        in_demand = st.slider("Customer Demand (What people want)", 30.0, 200.0, float(selected_demand))
+        in_forecast = st.slider("Your Sales Forecast", 30.0, 200.0, float(selected_forecast))
+    with col_right:
+        in_ss = st.slider("Safety Stock (Emergency Backup)", 0.0, 50.0, 32.0)
+        # Use averages for background variables to keep it simple for the user
+        in_ns = 32.0
+        in_ltd = in_forecast
         in_out = in_forecast + in_ss
 
-# Prediction Logic
-input_row = pd.DataFrame([[in_demand, in_forecast, in_ns, in_ltd, in_ss, in_out]], columns=features)
-prediction = model.predict(input_row)[0]
+# AI Prediction logic
+input_data = pd.DataFrame([[in_demand, in_forecast, in_ns, in_ltd, in_ss, in_out]], columns=features)
+prediction = model.predict(input_data)[0]
 
-st.info(f"### 🤖 AI Recommendation: You should order **{prediction:.2f} units** from your supplier.")
+st.success(f"### 🤖 Recommended Order Quantity: **{prediction:.2f} units**")
 
-# --- THE "STORY" VISUALIZATION ---
+# --- VISUALIZATION ---
 st.divider()
-st.subheader("📊 The Ripple Effect")
-st.write("The blue line is what customers want. The orange line is how the warehouse reacts. Notice how the orange line swings much wider!")
+st.subheader("📊 Visualizing the Bullwhip Effect")
+st.write("Compare the stable Customer Demand (Blue) against the volatile Warehouse Orders (Orange).")
 
-# Filtered chart for clarity
-df_plot = df.head(100)
-fig, ax = plt.subplots(figsize=(10, 3))
-sns.lineplot(data=df_plot[['Demand', 'Order']], palette=['#1f77b4', '#ff7f0e'], ax=ax)
-ax.set_title("Customer Demand vs. Warehouse Orders")
+# Show only first 100 rows for clarity
+fig, ax = plt.subplots(figsize=(10, 4))
+sns.lineplot(data=df.head(100)[['Demand', 'Order']], palette=['#1f77b4', '#ff7f0e'], ax=ax)
+ax.set_ylabel("Quantity")
+ax.set_xlabel("Time (Days)")
 st.pyplot(fig)
 
-st.success("💡 **Tip for Managers:** To reduce the 'Ripple', try to share more data with your suppliers and keep your 'Just-in-case' stock stable!")
+st.markdown("""
+---
+**How to interpret this?**
+If the orange line (Orders) has much higher peaks than the blue line (Demand), you are experiencing the **Bullwhip Effect**. 
+Our AI predictor helps flatten these peaks to save money on storage!
+""")
